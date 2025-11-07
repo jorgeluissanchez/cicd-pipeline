@@ -1,10 +1,16 @@
 def call(String dockerfile = 'Dockerfile') {
     sh """
-        if ! command -v hadolint &> /dev/null; then
-            wget -O /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 || true
-            chmod +x /usr/local/bin/hadolint || true
-        fi
-        hadolint ${dockerfile} || echo "Hadolint warnings found"
+        echo "[Hadolint] Checking ${dockerfile}"
+        
+        # Run Hadolint via Docker (no installation needed)
+        docker run --rm -i \
+            hadolint/hadolint:latest \
+            hadolint - < ${dockerfile} || {
+            echo "[Hadolint] Warning: Issues found in Dockerfile"
+            echo "[Hadolint] Continuing pipeline..."
+        }
+        
+        echo "[Hadolint] Check completed"
     """
 }
 

@@ -1,10 +1,10 @@
-@Library('shared-lib') _
+@Library('shared-lib@main') _
 
 pipeline {
     agent any
     
     environment {
-        DOCKER_REGISTRY = credentials('docker-hub-credentials')
+        DOCKER_USER = 'sanbajorge'
         IMAGE_NAME = "node${env.BRANCH_NAME}"
         IMAGE_TAG = 'v1.0'
         PORT = "${env.BRANCH_NAME == 'main' ? '3000' : '3001'}"

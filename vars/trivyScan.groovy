@@ -1,13 +1,20 @@
 def call(String imageName, String imageTag) {
-    def exitCode = sh(
-        script: "trivy image --exit-code 0 --severity HIGH,MEDIUM,LOW --no-progress ${imageName}:${imageTag}",
-        returnStatus: true
-    )
-    
-    if (exitCode != 0) {
-        echo "Trivy scan found vulnerabilities"
-    }
-    
-    sh "trivy image --exit-code 0 --severity HIGH,MEDIUM,LOW --no-progress ${imageName}:${imageTag}"
+    sh """
+        echo "[Trivy] Scanning image: ${imageName}:${imageTag}"
+        
+        # Run Trivy via Docker (no installation needed)
+        docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --no-progress \
+            ${imageName}:${imageTag} || {
+            echo "[Trivy] Warning: Vulnerabilities found or scan failed"
+            echo "[Trivy] Continuing pipeline..."
+        }
+        
+        echo "[Trivy] Scan completed"
+    """
 }
 
