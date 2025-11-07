@@ -1,0 +1,81 @@
+@Library('shared-lib') _
+
+pipeline {
+    agent any
+    
+    parameters {
+        choice(name: 'BRANCH', choices: ['main', 'dev'], description: 'Select branch to deploy')
+        choice(name: 'ACTION', choices: ['deploy', 'redeploy'], description: 'Deployment action')
+    }
+    
+    environment {
+        IMAGE_NAME = "node${params.BRANCH}"
+        IMAGE_TAG = 'v1.0'
+        PORT = "${params.BRANCH == 'main' ? '3000' : '3001'}"
+    }
+    
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    echo "Manual deployment initiated for branch: ${params.BRANCH}"
+                    echo "Action: ${params.ACTION}"
+                }
+            }
+        }
+        
+        stage('Pull Image') {
+            when {
+                expression { return fileExists('.dockerhub-enabled') }
+            }
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', 
+                                                      usernameVariable: 'DOCKER_USER', 
+                                                      passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker pull \${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG} || true
+                            docker logout
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                script {
+                    echo "Deploying ${IMAGE_NAME}:${IMAGE_TAG} to ${params.BRANCH} environment"
+                    cleanupContainers("${params.BRANCH}")
+                    dockerDeploy("${IMAGE_NAME}", "${IMAGE_TAG}", "${params.BRANCH}")
+                }
+            }
+        }
+        
+        stage('Verify') {
+            steps {
+                script {
+                    sh """
+                        sleep 5
+                        if docker ps | grep -q app-${params.BRANCH}; then
+                            echo "Container is running on port ${PORT}"
+                        else
+                            echo "Warning: Container may not be running"
+                        fi
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Manual deployment completed successfully for ${params.BRANCH}"
+        }
+        failure {
+            echo "Manual deployment failed for ${params.BRANCH}"
+        }
+    }
+}
+

@@ -1,0 +1,55 @@
+@Library('shared-lib') _
+
+pipeline {
+    agent any
+    
+    environment {
+        IMAGE_NAME = 'nodedev'
+        IMAGE_TAG = 'v1.0'
+        PORT = '3001'
+        BRANCH = 'dev'
+    }
+    
+    stages {
+        stage('Pull Image from Registry') {
+            steps {
+                script {
+                    echo "Pulling ${IMAGE_NAME}:${IMAGE_TAG} from Docker Hub"
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', 
+                                                      usernameVariable: 'DOCKER_USER', 
+                                                      passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                            docker pull \${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG}
+                            docker tag \${DOCKER_USER}/${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:${IMAGE_TAG}
+                            docker logout
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Dev') {
+            steps {
+                script {
+                    echo "Deploying to DEV environment on port ${PORT}"
+                    cleanupContainers('dev')
+                    sh """
+                        docker run -d --name app-dev -p ${PORT}:3000 ${IMAGE_NAME}:${IMAGE_TAG}
+                        echo "Application deployed at http://localhost:${PORT}"
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Deployment to DEV completed successfully"
+        }
+        failure {
+            echo "Deployment to DEV failed"
+        }
+    }
+}
+
